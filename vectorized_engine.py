@@ -30,7 +30,7 @@ class Tensor:
         """
         other = Tensor._as_tensor_2d(other)
         self.assert_same_shape(other)
-        out = Tensor(self.data + other.data, (self, other), "+")
+        out = Tensor(self.data + other.data, (self, other), "+", _name=f"({self._name} + {other._name})")
 
         def _backward():
             # For Z = X + Y, dL/dX = dL/dZ * dZ/dX = out.grad * 1 = out.grad. Same for dL/dY. 
@@ -43,7 +43,7 @@ class Tensor:
     def __mul__(self, other):
         # element-wise multiplication here, assuming same shape
         other = Tensor._as_tensor_2d(other)
-        out = Tensor(self.data * other.data, (self, other), "*")
+        out = Tensor(self.data * other.data, (self, other), "*", _name=f"({self._name} * {other._name})")
 
         def _backward():
             self.grad += other.data * out.grad
@@ -56,7 +56,7 @@ class Tensor:
         other = Tensor._as_tensor_2d(other)
         if self.data.shape[1] != other.data.shape[0]:
             raise ValueError(f"matmul shape mismatch: {self.data.shape} @ {other.data.shape}")
-        out = Tensor(self.data @ other.data, (self, other), "@")
+        out = Tensor(self.data @ other.data, (self, other), "@", _name=f"({self._name} @ {other._name})")
 
         def _backward():
             # For Y = X @ W:
@@ -70,7 +70,7 @@ class Tensor:
         return out
 
     def sum(self):
-        out = Tensor(np.array([[self.data.sum()]]), (self,), "sum")
+        out = Tensor(np.array([[self.data.sum()]]), (self,), "sum", _name=f"sum({self._name})")
 
         def _backward():
             self.grad += np.ones_like(self.data) * out.grad
@@ -96,10 +96,11 @@ class Tensor:
             raise ValueError(f"backward() expects scalar loss (shape (1, 1)), got {self.data.shape}")
         self.grad = np.ones_like(self.data) # gradient w.r.t itself is 1
         for v in reversed(topo):
+            # print("visited", v)
             v._backward()
 
     def __neg__(self): # -self
-        out = Tensor(-self.data, (self,), "neg")
+        out = Tensor(-self.data, (self,), "neg", _name=f"(-{self._name})")
 
         def _backward():
             self.grad += -out.grad
@@ -135,9 +136,9 @@ if __name__ == "__main__":
         [0.2, 0.7]
     ]), _name="W") # (3,2)
     b = Tensor(np.array([[0.1, 0.2]]), _name="b") # (1,2)
+    y = Tensor(np.array([[1.2, 1.3]]), _name="y")
 
     y_hat = x @ W + b # [0.8+0.1,0.9+0.2] = [0.9,1.1]
-    y = Tensor(np.array([[1.2, 1.3]]), _name="y")
     print("y hat", y_hat)
 
     loss = (y - y_hat).sum() # (1.2-0.9) + (1.3-1.1) = 0.5
