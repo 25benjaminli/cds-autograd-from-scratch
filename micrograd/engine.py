@@ -18,7 +18,7 @@ class Value:
         # each operation contains a _backward function that updates the gradients of the inputs
         # distribute the CURRENT gradient to its inputs (going backwards)
         # e.g. out = self + other, then d(out)/d(self) = 1, d(out)/d(other) = 1.
-        # dL/d(self) = dL/d(out) * d(out) / dself = out.grad * 1 = out.grad
+        # dL/d(self) = dL/d(out) * d(out) / d(self) = out.grad * 1 = out.grad
         def _backward():
             self.grad += out.grad
             other.grad += out.grad
@@ -78,7 +78,7 @@ class Value:
         build_topo(self)
 
         # reverse the topo order so we go from output -> input
-        self.grad = 1
+        self.grad = 1 # gradient w.r.t itself is 1
         for v in reversed(topo):
             v._backward()
 
@@ -105,3 +105,22 @@ class Value:
 
     def __repr__(self):
         return f"Value(data={self.data}, grad={self.grad})"
+    
+if __name__ == "__main__":
+    # simple test case with "loss"
+    x = Value(2.0)
+    w = Value(0.75)
+    b = Value(0.75)
+    y = Value(2.5)
+    y_hat = x * w + b # values are defined recursively, so the 
+    loss = y-y_hat
+    print("loss value", loss)
+
+    loss.backward() # updates all gradients from the final value
+    print("gradients (x,w,b,y,y_hat,loss):")
+    print("x", x.grad)
+    print("w", w.grad)
+    print("b", b.grad)
+    print("y", y.grad)
+    print("yhat", y_hat.grad)
+    print("loss", loss.grad)
