@@ -1,6 +1,5 @@
 import numpy as np
 
-# no broadcasting rn
 
 class Tensor:
     def __init__(self, data: np.ndarray, _children=(), _op='', _name=None):
@@ -18,6 +17,16 @@ class Tensor:
             raise ValueError(f"shape mismatch: {self.data.shape} vs {other.data.shape}")
     
     @staticmethod
+    def _reduce_grad_to_shape(grad, target_shape):
+        """Reduce grad from broadcasted shape back to target_shape by summing."""
+        # Sum over axes where target has size 1 but grad is larger
+        for i, (grad_dim, target_dim) in enumerate(zip(grad.shape, target_shape)):
+            if target_dim == 1 and grad_dim > 1:
+                grad = grad.sum(axis=i, keepdims=True)
+        
+        return grad
+    
+    @staticmethod
     def _as_tensor_2d(other):
         other = other if isinstance(other, Tensor) else Tensor(other)
         if other.data.ndim != 2:
@@ -29,25 +38,31 @@ class Tensor:
         element wise addition
         """
         other = Tensor._as_tensor_2d(other)
-        self.assert_same_shape(other)
-        out = Tensor(self.data + other.data, (self, other), "+", _name=f"({self._name} + {other._name})")
+        # self.assert_same_shape(other)
+        a_bcast, b_bcast = np.broadcast_arrays(self.data, other.data)
+        out = Tensor(a_bcast + b_bcast, (self, other), "+", _name=f"({self._name} + {other._name})")
 
         def _backward():
             # For Z = X + Y, dL/dX = dL/dZ * dZ/dX = out.grad * 1 = out.grad. Same for dL/dY. 
-            self.grad += out.grad
-            other.grad += out.grad
+            self.grad += Tensor._reduce_grad_to_shape(out.grad, self.data.shape)
+            other.grad += Tensor._reduce_grad_to_shape(out.grad, other.data.shape)
+        
         out._backward = _backward
-
         return out
     
     def __mul__(self, other):
-        # element-wise multiplication here, assuming same shape
         other = Tensor._as_tensor_2d(other)
-        out = Tensor(self.data * other.data, (self, other), "*", _name=f"({self._name} * {other._name})")
+        try:
+            a_bcast, b_bcast = np.broadcast_arrays(self.data, other.data)
+        except ValueError as e:
+            raise ValueError(f"mul shape mismatch: {self.data.shape} vs {other.data.shape}") from e
 
+        out = Tensor(a_bcast * b_bcast, (self, other), "*", _name=f"({self._name} * {other._name})")
+        
         def _backward():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+            # for Z = X * Y, dL/dX = dL/dZ * dZ/dX = out.grad * Y, and dL/dY = out.grad * X.
+            self.grad += Tensor._reduce_grad_to_shape(b_bcast * out.grad, self.data.shape)
+            other.grad += Tensor._reduce_grad_to_shape(a_bcast * out.grad, other.data.shape)
 
         out._backward = _backward
         return out
@@ -78,8 +93,16 @@ class Tensor:
         out._backward = _backward
         return out
     
-    def backward(self):
+    def relu(self):
+        out = Tensor(self.data * (self.data > 0), (self,), "ReLU", _name=f"ReLU({self._name})")
 
+        def _backward():
+            self.grad += (self.data > 0) * out.grad
+
+        out._backward = _backward
+        return out
+    
+    def backward(self):
         # topological order all of the children in the graph, it does a DFS to collect the nodes in the graph
         topo = []
         visited = set()
@@ -129,6 +152,7 @@ class Tensor:
         return f"Tensor(data={self.data}, grad={self.grad}, op={self._op}, name={self._name})"
     
 if __name__ == "__main__":
+    """
     x = Tensor(np.array([[1.0, 0.0, 1.0]]), _name="x") # (1,3)
     W = Tensor(np.array([
         [0.6, 0.2],
@@ -147,3 +171,10 @@ if __name__ == "__main__":
     print("x.grad", x.grad)
     print("W.grad", W.grad)
     print("b.grad", b.grad)
+    """
+
+    # broadcast_arrays returns arrays broadcasted to the same shape.
+    # in the case of ml, you might have W @ x + b, where W @ x is (B, n) and b is (n,), so you want to broadcast b to (B, n) before adding. 
+    a = np.array([[1, 2], [3, 4], [5,6]]) # (3,2)
+    b = np.array([0.1,0.2]) # (2,)
+    print("a + b:", a + b)
