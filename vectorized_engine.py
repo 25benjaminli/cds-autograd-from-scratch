@@ -83,6 +83,7 @@ class Tensor:
 
         out._backward = _backward
         return out
+    
 
     def sum(self):
         out = Tensor(np.array([[self.data.sum()]]), (self,), "sum", _name=f"sum({self._name})")
@@ -98,6 +99,30 @@ class Tensor:
 
         def _backward():
             self.grad += (self.data > 0) * out.grad
+
+        out._backward = _backward
+        return out
+    
+    def softmax(self):
+        shifted = self.data - self.data.max(axis=1, keepdims=True)
+        exps = np.exp(shifted)
+        out = Tensor(exps / exps.sum(axis=1, keepdims=True), 
+                     (self,), "softmax", _name=f"softmax({self._name})") # (B,C)
+        
+        def _backward():
+            # apparently this gradient is more efficient, so we'll use it
+            s = out.data
+            g = out.grad
+            self.grad += s * (g - (g * s).sum(axis=1, keepdims=True))
+        
+        out._backward = _backward
+        return out
+    
+    def log(self):
+        out = Tensor(np.log(self.data), (self,), "log", _name=f"log({self._name})")
+
+        def _backward():
+            self.grad += (1 / self.data) * out.grad
 
         out._backward = _backward
         return out
@@ -121,6 +146,17 @@ class Tensor:
         for v in reversed(topo):
             # print("visited", v)
             v._backward()
+
+    
+    def __pow__(self, exponent):
+        out = Tensor(self.data ** exponent, (self,), f"pow({exponent})", _name=f"({self._name}**{exponent})")
+
+        def _backward():
+            self.grad += (exponent * self.data ** (exponent - 1)) * out.grad
+
+        out._backward = _backward
+        return out
+    
 
     def __neg__(self): # -self
         out = Tensor(-self.data, (self,), "neg", _name=f"(-{self._name})")
@@ -175,6 +211,17 @@ if __name__ == "__main__":
 
     # broadcast_arrays returns arrays broadcasted to the same shape.
     # in the case of ml, you might have W @ x + b, where W @ x is (B, n) and b is (n,), so you want to broadcast b to (B, n) before adding. 
-    a = np.array([[1, 2], [3, 4], [5,6]]) # (3,2)
-    b = np.array([0.1,0.2]) # (2,)
-    print("a + b:", a + b)
+    # a = np.array([[1, 2], [3, 4], [5,6]]) # (3,2)
+    # b = np.array([0.1,0.2]) # (2,)
+    # print("a + b:", a + b)
+    x = Tensor(np.array([[1.0, 0.0, 1.0]]))          # (1,3)
+    W = Tensor(np.array([[1.0, 0.0],                  # (3,2)
+                        [0.0, 1.0],
+                        [1.0, 0.0]]))
+    b = Tensor(np.array([[0.0, 0.0]]))                # (1,2)
+    y = Tensor(np.array([[3.0, 1.0]]))                # (1,2)
+
+    y_hat = x @ W + b   # [1+0+1, 0+0+0] = [2, 0]
+    loss = ((y - y_hat) ** 2).sum()   # (3-2)^2 + (1-0)^2 = 2.0
+    loss.backward()
+    print("W grad:", W.grad) # should be [[-2, 0], [0, 0], [-2, 0]]

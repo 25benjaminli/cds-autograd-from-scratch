@@ -8,7 +8,7 @@ from vectorized_engine import Tensor
 class Module:
     def zero_grad(self):
         for p in self.parameters():
-            p.grad = 0
+            p.grad = np.zeros_like(p.grad)
 
     def parameters(self):
         return []
@@ -16,7 +16,8 @@ class Module:
 class Layer(Module):
     def __init__(self, in_channels, out_channels, nonlin=True):
         self.in_channels = in_channels
-        self.mat = Tensor(np.random.randn(in_channels, out_channels), _name="weight")
+        # some initialization scheme to keep variance of activations stable across layers
+        self.mat = Tensor(np.random.randn(in_channels, out_channels) * np.sqrt(2.0 / in_channels), _name="weight")
         self.bias = Tensor(np.zeros((1, out_channels)), _name="bias")
         self.nonlin = nonlin
 
