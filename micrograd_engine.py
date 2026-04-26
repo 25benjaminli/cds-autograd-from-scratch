@@ -1,3 +1,4 @@
+import numpy as np
 # https://github.com/karpathy/micrograd
 class Value:
     """ stores a single scalar value and its gradient """
@@ -53,6 +54,17 @@ class Value:
 
         return out
 
+    def log(self):
+        out = Value(np.log(self.data), (self,), 'log')
+
+        # out = log(self)
+        # dL/d(self) = dL/d(out) * d(out)/d(self) = out.grad * 1/self.data
+        def _backward():
+            self.grad += (1 / self.data) * out.grad
+        out._backward = _backward
+
+        return out
+
     def relu(self):
         out = Value(0 if self.data < 0 else self.data, (self,), 'ReLU')
 
@@ -63,7 +75,14 @@ class Value:
         out._backward = _backward
 
         return out
-
+    
+    def exp(self):
+        out = Value(np.exp(self.data), (self,), 'exp')
+        def _backward():
+            self.grad += np.exp(self.data) * out.grad
+        out._backward = _backward
+        return out
+    
     def backward(self):
 
         # topological order all of the children in the graph, it does a DFS to collect the nodes in the graph

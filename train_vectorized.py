@@ -5,21 +5,20 @@ general structure:
 3. Initialize MLP
 4. For each epoch: you'll pass data through MLP, compute loss w.r.t ground truth, then backprop and update gradients
 5. Evaluate on test set
-
-TODOs:
-[x] get our vectorized implementation working
-[] compare speed / other metrics vs. karpathy's micrograd
 """
 
 import numpy as np
 from vectorized_nn import MLP as MLP_vec
-from micrograd_nn import MLP as MLP_micro
 from vectorized_engine import Tensor
 from sklearn.datasets import load_digits
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
-from tqdm import tqdm
 import time
+import matplotlib.pyplot as plt
+
+# silence runtime errors, not the best practice but it's working
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 def cross_entropy(y_pred, y_true):
     batch_size = y_true.data.shape[0]
@@ -36,18 +35,9 @@ def accuracy(y_pred, y_true):
     return (pred_labels == true_labels).mean()
 
 def get_batched_data(X, y, batch_size):
-    X, y = shuffle(X, y)
-    X_batches = [
-        X[i:i+batch_size] if batch_size > 1 else 
-        np.expand_dims(X[i:i+batch_size], axis=0) 
-        for i in range(0, X.shape[0], batch_size)
-    ]
-    y_batches = [
-        y[i:i+batch_size] if batch_size > 1
-        else np.expand_dims(y[i:i+batch_size], axis=0)
-        for i in range(0, y.shape[0], batch_size)
-    ]
-    return X_batches, y_batches
+    # use a generator to yield batches
+    for i in range(0, len(X), batch_size):
+        yield X[i:i + batch_size], y[i:i + batch_size]
 
 def run():
     np.random.seed(42) # reproducibility
@@ -55,8 +45,6 @@ def run():
     """hyperparameters"""
     lr = 0.05
     batch_size = 32
-    use_vectorized = False # right now this doesn't work, we need to test it
-
     X, y = load_digits(return_X_y=True)
     X = X / 16.0 # normalize pixel values to [0, 1] since they're originally in [0, 16]
     
@@ -64,13 +52,8 @@ def run():
     in_features = X_train.shape[1] # 64 for 8x8 images
     out_features = len(np.unique(y_train))
     
-    if use_vectorized:
-        model = MLP_vec(in_features, [128, 64, out_features])
-    else:
-        model = MLP_micro(in_features, [128, 64, out_features])
+    model = MLP_vec(in_features, [128, 64, out_features])
 
-    # one-hot encode the labels, np.eye creates the identity matrix and we just select appropriate indices
-    y_train_one_hot = np.eye(out_features)[y_train]
     # print("X, y shapes:", X_train_tensor.data.shape, y_train_tensor.data.shape)
 
     print("number of training samples", X_train.shape[0])
@@ -78,8 +61,10 @@ def run():
     for epoch in range(10):
         mean_loss = 0
         # shuffle both before training
-        X_train_batches, y_train_batches = get_batched_data(X_train, y_train_one_hot, batch_size)
-        for sample_x, sample_y in zip(X_train_batches, y_train_batches):
+        X_train, y_train = shuffle(X_train, y_train, random_state=epoch)
+        batches = get_batched_data(X_train, y_train, batch_size)
+        for sample_x, sample_y_idx in batches:
+            sample_y = np.eye(out_features)[sample_y_idx]
             x_tensor = Tensor(sample_x, _name="sample x")
             y_tensor = Tensor(sample_y, _name="sample y")
             logits = model(x_tensor)
@@ -87,12 +72,14 @@ def run():
             loss.backward()
             
             # very simply update params w/ SGD
+            scale = 1.0 / len(sample_x)
             for p in model.parameters():
+                p.grad *= scale
                 p.data -= lr * p.grad
             
             model.zero_grad()
             mean_loss += loss.data.item()
-        mean_loss /= len(X_train_batches)
+        mean_loss /= len(X_train)
         print(f"epoch {epoch}, mean loss: {mean_loss:.4f}")
 
     print("total training time", time.time() - t1)
@@ -103,7 +90,29 @@ def run():
     preds = model(X_test_tensor).softmax()
     print("accuracy", accuracy(preds, y_test_tensor))
 
-    # TODO: visualize a few examples
+    # visualize four random examples, for each retrieve top 3 predictions and the softmax values
+    rand_indices = np.random.randint(0,len(X_test),size=4)
+    rand_X, rand_y = X_test[rand_indices], y_test[rand_indices]
+    test_preds = model(Tensor(rand_X)).softmax().data
+
+    print("X, y shapes:", rand_X.shape, rand_y.shape, test_preds.shape)
+
+    fig, axes = plt.subplots(2,2, figsize=(10, 7))
+
+    rand_X = rand_X.reshape(-1, 8, 8) # reshape to 8x8 for vis
+    
+    for idx, ax in enumerate(axes.flatten()):
+        ax.axis("off")
+        ax.imshow(rand_X[idx])
+        top3 = np.argsort(test_preds[idx])[::-1][:3]
+        conf = test_preds[idx][top3]
+        ax.set_title(
+			f"number {rand_y[idx]} top 3 {top3} conf {np.round(conf, 2)}",
+			fontsize=9,
+		)
+
+    fig.tight_layout(pad=1.2)
+    plt.show()
 
 
 if __name__ == "__main__":

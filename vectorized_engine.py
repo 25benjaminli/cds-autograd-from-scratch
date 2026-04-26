@@ -224,4 +224,4 @@ if __name__ == "__main__":
     y_hat = x @ W + b   # [1+0+1, 0+0+0] = [2, 0]
     loss = ((y - y_hat) ** 2).sum()   # (3-2)^2 + (1-0)^2 = 2.0
     loss.backward()
-    print("W grad:", W.grad) # should be [[-2, 0], [0, 0], [-2, 0]]
+    print("W grad:", W.grad) # should be [[-2, -2], [0, 0], [-2, -2]]

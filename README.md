@@ -15,10 +15,9 @@ Also check out [example.md](example.md) for a sample problem, which is also impl
 Todos:
 - [x] implement vectorized engine for 2D matrices
 - [x] add explanation (example.md)
-- [ ] add broadcasting
-- [ ] support higher dimensional (n>=3) tensor computations
-- [ ] add optimizers
-- [ ] test MLP / CNN / transformer on datasets
-- [ ] unit tests with numerical differentiation to verify validity
-- [ ] graph visualizations? 
-- [ ] use cupy for gpu-accelerated operations? 
+- [x] add broadcasting
+- [x] unit tests with numerical differentiation to verify validity
+- [x] add SGD (and maybe adam)
+- [x] test MLP on MNIST
+- [x] compare with karpathy's micrograd
+- [] graph visualizations [IN PROGRESS, `backprop_viz.py`]
