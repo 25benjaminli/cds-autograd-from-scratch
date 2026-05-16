@@ -20,4 +20,4 @@ Todos:
 - [x] add SGD (and maybe adam)
 - [x] test MLP on MNIST
 - [x] compare with karpathy's micrograd
-- [] graph visualizations [IN PROGRESS, `backprop_viz.py`]
+- [x] graph visualizations

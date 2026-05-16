@@ -43,7 +43,7 @@ def run():
     np.random.seed(42) # reproducibility
     
     """hyperparameters"""
-    lr = 0.05
+    lr = 0.5
     batch_size = 32
     X, y = load_digits(return_X_y=True)
     X = X / 16.0 # normalize pixel values to [0, 1] since they're originally in [0, 16]

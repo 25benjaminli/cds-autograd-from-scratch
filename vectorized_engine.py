@@ -188,27 +188,6 @@ class Tensor:
         return f"Tensor(data={self.data}, grad={self.grad}, op={self._op}, name={self._name})"
     
 if __name__ == "__main__":
-    """
-    x = Tensor(np.array([[1.0, 0.0, 1.0]]), _name="x") # (1,3)
-    W = Tensor(np.array([
-        [0.6, 0.2],
-        [0.3, 0.4],
-        [0.2, 0.7]
-    ]), _name="W") # (3,2)
-    b = Tensor(np.array([[0.1, 0.2]]), _name="b") # (1,2)
-    y = Tensor(np.array([[1.2, 1.3]]), _name="y")
-
-    y_hat = x @ W + b # [0.8+0.1,0.9+0.2] = [0.9,1.1]
-    print("y hat", y_hat)
-
-    loss = (y - y_hat).sum() # (1.2-0.9) + (1.3-1.1) = 0.5
-    loss.backward()
-    print("loss", loss)
-    print("x.grad", x.grad)
-    print("W.grad", W.grad)
-    print("b.grad", b.grad)
-    """
-
     # broadcast_arrays returns arrays broadcasted to the same shape.
     # in the case of ml, you might have W @ x + b, where W @ x is (B, n) and b is (n,), so you want to broadcast b to (B, n) before adding. 
     # a = np.array([[1, 2], [3, 4], [5,6]]) # (3,2)
