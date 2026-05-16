@@ -1,50 +1,59 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import networkx as nx
+import matplotlib.patches as mpatches
 from matplotlib.patches import FancyArrowPatch
 from matplotlib.widgets import Button
 from vectorized_engine import Tensor
 
 plt.rcParams.update({
-    "text.usetex": True,
+    "text.usetex": False,
+    "mathtext.fontset": "cm",
     "font.family": "serif",
-    "font.serif": ["Computer Modern Roman"],
-    "text.latex.preamble": r"\usepackage{amsmath}",
 })
 
+BG       = "#f5f5f0"
+NODE_DEF = "#ffffff"
+NODE_ACT = "#c8d8e8"
+NODE_UPD = "#c8e6c8"
+NODE_PAR = "#fdf6e3"
+EDGE_COL = "#888888"
+
+BOX_W, BOX_H = 1.8, 1.3
+SHRINK = 28
+
 FORMULAS = {
-    "@":   r"$\nabla_X \mathrel{+}= \nabla_Y W^\top,\quad \nabla_W \mathrel{+}= X^\top \nabla_Y$",
-    "+":   r"$\nabla_A \mathrel{+}= \nabla_Z,\quad \nabla_B \mathrel{+}= \nabla_Z$",
-    "neg": r"$\nabla_X \mathrel{+}= -\nabla_Y$",
-    "sum": r"$\nabla_X \mathrel{+}= \mathbf{1}\,\nabla_Y$",
-    "":    r"$\text{Leaf -- no backward rule}$",
+    "@":   r"$\nabla_X += \nabla_Y W^T,\quad \nabla_W += X^T \nabla_Y$",
+    "+":   r"$\nabla_A += \nabla_Z,\ \ \nabla_B += \nabla_Z$",
+    "neg": r"$\nabla_X += -\nabla_Y$",
+    "sum": r"$\nabla_X += \mathbf{1} \cdot \nabla_Y$",
 }
-POW_FORMULA = r"$\nabla_X \mathrel{+}= n\,X^{n-1} \odot \nabla_Y$"
+POW_FORMULA = r"$\nabla_X += n\,X^{n-1} \odot \nabla_Y$"
 
 LABELS = {
-    "x": r"$x$", "W": r"$W$", "b": r"$b$", "y": r"$y$",
-    "xW": r"$xW$", "y_hat": r"$\hat{y}$", "neg_yhat": r"$-\hat{y}$",
+    "x": "$x$", "W": "$W$", "b": "$b$", "y": "$y$",
+    "xW": "$xW$", "y_hat": r"$\hat{y}$", "neg_yhat": r"$-\hat{y}$",
     "err": r"$y-\hat{y}$", "sq_err": r"$(y-\hat{y})^2$", "loss": r"$\mathcal{L}$",
+}
+
+LAYOUT = {
+    "x":       (-4.5, 3.2), "W":       (-2.5, 3.2), "xW":      (-3.5, 1.6),
+    "b":       ( 0.0, 3.2), "y_hat":   ( 0.0, 1.6), "neg_yhat":( 0.0, 0.0),
+    "y":       ( 3.5, 3.2), "err":     ( 3.5, 1.6), "sq_err":  ( 3.5, 0.0),
+    "loss":    ( 3.5,-1.6),
 }
 
 
 def build_graph():
-    x = Tensor(np.array([[1., 0., 1.]]), _name="x")
-    W = Tensor(np.array([[1.,0.],[0.,1.],[1.,0.]]), _name="W")
-    b = Tensor(np.array([[0., 0.]]), _name="b")
-    y = Tensor(np.array([[3., 1.]]), _name="y")
-    xW = x @ W
-    xW._name = "xW"
-    y_hat = xW + b
-    y_hat._name= "y_hat"
-    neg_yhat = -y_hat
-    neg_yhat._name = "neg_yhat"
-    err = y + neg_yhat
-    err._name = "err"
-    sq_err = err ** 2
-    sq_err._name = "sq_err"
-    loss = sq_err.sum()
-    loss._name = "loss"
+    x     = Tensor(np.array([[1., 0., 1.]]),           _name="x")
+    W     = Tensor(np.array([[1.,0.],[0.,1.],[1.,0.]]), _name="W")
+    b     = Tensor(np.array([[0., 0.]]),                _name="b")
+    y     = Tensor(np.array([[3., 1.]]),                _name="y")
+    xW        = x @ W;      xW._name      = "xW"
+    y_hat     = xW + b;     y_hat._name   = "y_hat"
+    neg       = -y_hat;     neg._name     = "neg_yhat"
+    err       = y + neg;    err._name     = "err"
+    sq        = err ** 2;   sq._name      = "sq_err"
+    loss      = sq.sum();   loss._name    = "loss"
     return loss, [W, b]
 
 
@@ -59,69 +68,27 @@ def topo_order(root):
     return order
 
 
-def auto_layout(nodes, edges):
-    G = nx.DiGraph()
-    G.add_nodes_from(nodes)
-    G.add_edges_from(edges)
-
-    by_name = {n._name: n for n in nodes if n._name is not None}
-    pos = {}
-
-    if "x" in by_name and "W" in by_name and "xW" in by_name:
-        pos[by_name["x"]] = (-4.0, 3.2)
-        pos[by_name["W"]] = (-2.0, 3.2)
-        pos[by_name["xW"]] = (-3.0, 1.55)
-
-    if "b" in by_name and "y_hat" in by_name:
-        pos[by_name["b"]] = (0.0, 3.2)
-        pos[by_name["y_hat"]] = (0.0, 1.55)
-
-    if "neg_yhat" in by_name:
-        pos[by_name["neg_yhat"]] = (0.0, -0.1)
-
-    if "y" in by_name and "err" in by_name:
-        pos[by_name["y"]] = (3.0, 3.2)
-        pos[by_name["err"]] = (3.0, 1.55)
-
-    if "sq_err" in by_name and "loss" in by_name:
-        pos[by_name["sq_err"]] = (3.0, -0.1)
-        pos[by_name["loss"]] = (3.0, -1.75)
-
-    remaining = [n for n in nodes if n not in pos]
-    if remaining:
-        for n in nx.topological_sort(G):
-            preds = list(G.predecessors(n))
-            G.nodes[n]["layer"] = max((G.nodes[p]["layer"] for p in preds), default=-1) + 1
-        raw = nx.multipartite_layout(G.subgraph(remaining), subset_key="layer", scale=1.4)
-        xs, ys = [p[0] for p in raw.values()], [p[1] for p in raw.values()]
-
-        def remap(v, s0, s1, d0, d1):
-            return d0 if s0 == s1 else d0 + (v - s0) / (s1 - s0) * (d1 - d0)
-
-        pos.update({
-            n: (
-                remap(p[0], min(xs), max(xs), -6.0, 4.0),
-                remap(p[1], min(ys), max(ys), -3.6, 3.6),
-            )
-            for n, p in raw.items()
-        })
-
-    return pos
-
-
-def snap(nodes):
-    return {n: (n.data.copy(), n.grad.copy()) for n in nodes}
+def fmt_arr(arr):
+    flat = arr.flatten()
+    if flat.size <= 6:
+        if arr.ndim == 2 and arr.shape[0] > 1:
+            rows = ["  ".join(f"{v:+.2f}" for v in r) for r in arr]
+            return "\n".join(f"[{r}]" for r in rows)
+        return "[" + "  ".join(f"{v:+.2f}" for v in flat) + "]"
+    return f"[{flat[0]:+.2f} … {flat[-1]:+.2f}]  ({arr.shape})"
 
 
 def build_steps(loss, params, lr):
     topo  = topo_order(loss)
+    snap  = lambda: {n: (n.data.copy(), n.grad.copy()) for n in topo}
     steps = []
 
     for n in topo:
-        steps.append(("Forward: " + n._name, {n}, set(), snap(topo), None))
+        steps.append(("Forward: " + n._name, {n}, set(), snap(), None))
 
     loss.grad = np.ones_like(loss.data)
-    steps.append(("Backward init: dloss/dloss=1", {loss}, {loss}, snap(topo),
+    steps.append(("Backward init: $\\partial\\mathcal{L}/\\partial\\mathcal{L}=1$",
+                  {loss}, {loss}, snap(),
                   r"$\partial\mathcal{L}/\partial\mathcal{L}=1$"))
 
     for n in reversed(topo):
@@ -129,91 +96,131 @@ def build_steps(loss, params, lr):
         n._backward()
         changed = {x for x in topo if not np.allclose(before[x], x.grad)}
         formula = POW_FORMULA if n._op.startswith("pow(") else FORMULAS.get(n._op, "")
-        steps.append(("Backward: " + n._name, {n}, changed, snap(topo), formula))
+        steps.append(("Backward: " + n._name, {n}, changed, snap(), formula))
 
     for p in params:
         old, gn = np.linalg.norm(p.data), np.linalg.norm(p.grad)
         p.data -= lr * p.grad
-        steps.append((f"Update {p._name}: |p| {old:.3f}->{np.linalg.norm(p.data):.3f}, |g|={gn:.3f}",
-                      {p}, {p}, snap(topo), rf"$\theta \leftarrow \theta - {lr}\,\nabla_\theta$"))
+        steps.append((f"Update {p._name}: |p|={old:.3f}→{np.linalg.norm(p.data):.3f}  |g|={gn:.3f}",
+                      {p}, {p}, snap(),
+                      rf"$\theta \leftarrow \theta - {lr}\,\nabla_\theta$"))
 
     return topo, steps
 
 
-def mat_latex(arr):
-    rows = [" & ".join(f"{v:.2f}" for v in r) for r in arr]
-    return r"$\begin{bmatrix}" + r" \\ ".join(rows) + r"\end{bmatrix}$"
-
-
 class Viewer:
-    COLORS = {"active": "#e8e8e8", "updated": "#d4edda", "param": "#fdf6e3", "default": "white"}
-
     def __init__(self, loss, params, lr=0.1):
         self.topo, self.steps = build_steps(loss, params, lr)
-        self.edges = [(p, n) for n in self.topo for p in n._prev]
-        self.pos = auto_layout(self.topo, self.edges)
         self.params = set(params)
-        self.idx = 0
+        self.idx    = 0
 
-        self.fig, self.ax = plt.subplots(figsize=(13, 8))
-        self.fig.subplots_adjust(bottom=0.2)
-        self._btn = []
-        for label, rect, delta in [("Prev", [0.35,0.06,0.12,0.075], -1),
-                                    ("Next", [0.53,0.06,0.12,0.075], +1)]:
-            btn = Button(self.fig.add_axes(rect), label)
+        by_name  = {n._name: n for n in self.topo if n._name}
+        self.pos = {by_name[k]: v for k, v in LAYOUT.items() if k in by_name}
+        self.edges = [(p, n) for n in self.topo for p in n._prev]
+
+        self.fig = plt.figure(figsize=(14, 8.5))
+        self.fig.patch.set_facecolor(BG)
+        self.ax_title = self.fig.add_axes([0.02, 0.88, 0.96, 0.10])
+        self.ax_title.set_facecolor(BG)
+        self.ax_title.axis("off")
+        self.ax = self.fig.add_axes([0.02, 0.18, 0.96, 0.68])
+        self.ax.set_facecolor(BG)
+        self.ax.axis("off")
+
+        xs, ys = zip(*self.pos.values())
+        self.ax.set_xlim(min(xs) - 1.4, max(xs) + 1.4)
+        self.ax.set_ylim(min(ys) - 1.4, max(ys) + 0.8)
+
+        self._build_artists()
+        self._build_buttons()
+        self._update()
+
+    def _build_artists(self):
+        self._edges = {}
+        for src, dst in self.edges:
+            if src not in self.pos or dst not in self.pos: continue
+            x1, y1 = self.pos[src]
+            x2, y2 = self.pos[dst]
+            arrow = FancyArrowPatch(
+                (x1, y1), (x2, y2), arrowstyle="-|>", mutation_scale=14,
+                linewidth=1.2, color=EDGE_COL, shrinkA=SHRINK, shrinkB=SHRINK,
+                connectionstyle="arc3,rad=0.0", zorder=1, clip_on=False, visible=False)
+            self.ax.add_patch(arrow)
+            mx, my = 0.5*(x1+x2), 0.5*(y1+y2)
+            lbl = self.ax.text(mx, my, dst._op or "input", ha="center", va="center",
+                fontsize=7.5, color="#555",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor=BG, edgecolor="none"),
+                zorder=2, visible=False)
+            self._edges[(src, dst)] = (arrow, lbl)
+
+        self._patches, self._name_texts, self._val_texts = {}, {}, {}
+        for n, (x, y) in self.pos.items():
+            self._patches[n] = self.ax.add_patch(mpatches.FancyBboxPatch(
+                (x - BOX_W/2, y - BOX_H/2), BOX_W, BOX_H,
+                boxstyle="round,pad=0.08", facecolor=NODE_DEF, edgecolor="#444444",
+                linewidth=1.2, zorder=3, clip_on=False, visible=False))
+            self._name_texts[n] = self.ax.text(
+                x, y + BOX_H*0.22, LABELS.get(n._name, n._name or "?"),
+                ha="center", va="center", fontsize=11, fontweight="bold",
+                color="#111", zorder=5, visible=False)
+            self._val_texts[n] = self.ax.text(
+                x, y - BOX_H*0.2, "", ha="center", va="center",
+                fontsize=7.5, color="#333", family="monospace", zorder=5, visible=False)
+
+        self._title_txt   = self.ax_title.text(0.5, 0.65, "", transform=self.ax_title.transAxes,
+                                ha="center", va="top", fontsize=12, color="#222222")
+        self._counter_txt = self.ax_title.text(0.5, 0.15, "", transform=self.ax_title.transAxes,
+                                ha="center", va="bottom", fontsize=9, color="#666")
+        xl, yl = self.ax.get_xlim(), self.ax.get_ylim()
+        self._formula_txt = self.ax.text(
+            xl[0] + 0.1, yl[0] + 0.1, "", ha="left", va="bottom",
+            fontsize=13, color="#1a1a1a", zorder=6, visible=False,
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white",
+                      edgecolor="#aaaaaa", linewidth=0.9))
+
+    def _build_buttons(self):
+        self._btns = []
+        for ax_b, label, delta in [
+            (self.fig.add_axes([0.38, 0.05, 0.10, 0.07]), "◀  Prev", -1),
+            (self.fig.add_axes([0.52, 0.05, 0.10, 0.07]), "Next  ▶", +1),
+        ]:
+            btn = Button(ax_b, label, color="#dde3ea", hovercolor="#bcc8d8")
+            btn.label.set_fontsize(11)
             btn.on_clicked(lambda _, d=delta: self._step(d))
-            self._btn.append(btn)
-
-        self.render()
+            self._btns.append(btn)
 
     def _step(self, d):
         self.idx = max(0, min(self.idx + d, len(self.steps) - 1))
-        self.render()
+        self._update()
 
-    def render(self):
-        self.ax.clear()
-        self.ax.axis("off")
-        self.ax.set_facecolor("white")
-
+    def _update(self):
         title, active, updated, sp, formula = self.steps[self.idx]
+        n_fwd    = len(self.topo)
+        revealed = set(self.topo[:self.idx + 1]) if self.idx < n_fwd else set(self.topo)
 
-        xs, ys = zip(*self.pos.values())
-        self.ax.set_xlim(min(xs) - 0.8, max(xs) + 0.8)
-        self.ax.set_ylim(min(ys) - 1.8, max(ys) + 0.6)
+        for (src, dst), (arrow, lbl) in self._edges.items():
+            vis = src in revealed and dst in revealed
+            arrow.set_visible(vis)
+            lbl.set_visible(vis)
 
-        for src, dst in self.edges:
-            x1, y1 = self.pos[src]
-            x2, y2 = self.pos[dst]
-            self.ax.add_patch(FancyArrowPatch(
-                (x1, y1), (x2, y2),
-                arrowstyle="->", mutation_scale=11, linewidth=1.2, color="#888888",
-                shrinkA=18, shrinkB=18, connectionstyle="arc3,rad=0.0", clip_on=False))
-            self.ax.text(0.5 * (x1 + x2), 0.5 * (y1 + y2), dst._op or "input",
-                         ha="center", va="center", fontsize=8, color="#555",
-                         bbox={"boxstyle":"round,pad=0.15","facecolor":"white","edgecolor":"none"})
-
-        for n, (x, y) in self.pos.items():
-            color = (self.COLORS["active"]  if n in active  else
-                     self.COLORS["updated"] if n in updated else
-                     self.COLORS["param"]   if n in self.params else
-                     self.COLORS["default"])
+        for n in self.topo:
+            if n not in self.pos: continue
+            vis = n in revealed
+            self._patches[n].set_visible(vis)
+            self._name_texts[n].set_visible(vis)
+            self._val_texts[n].set_visible(vis)
+            if not vis: continue
+            self._patches[n].set_facecolor(
+                NODE_ACT if n in active else
+                NODE_UPD if n in updated else
+                NODE_PAR if n in self.params else NODE_DEF)
             d, g = sp[n]
-            self.ax.text(x, y,
-                         f"{LABELS.get(n._name, n._name)}\nv={mat_latex(d)}\ng={mat_latex(g)}",
-                         ha="center", va="center", fontsize=10,
-                         bbox={"boxstyle":"round,pad=0.4","facecolor":color,
-                               "edgecolor":"#1a1a1a","linewidth":0.8})
+            self._val_texts[n].set_text(f"v={fmt_arr(d)}\ng={fmt_arr(g)}")
 
-        self.ax.set_title(
-            f"Step {self.idx+1}/{len(self.steps)} -- {title}\n"
-            r"\text{grey=active, green=updated}", fontsize=11, pad=14)
-
-        if formula:
-            xl, yl = self.ax.get_xlim(), self.ax.get_ylim()
-            self.ax.text(xl[0]+0.05, yl[0]+0.05, formula, ha="left", va="bottom", fontsize=16,
-                         bbox={"boxstyle":"round,pad=0.25","facecolor":"white",
-                               "edgecolor":"#1a1a1a","linewidth":0.8})
-
+        self._title_txt.set_text(title)
+        self._counter_txt.set_text(f"step {self.idx+1} / {len(self.steps)}")
+        self._formula_txt.set_text(formula or "")
+        self._formula_txt.set_visible(bool(formula))
         self.fig.canvas.draw_idle()
 
 
